@@ -1,4 +1,5 @@
 # from diarization import diar
+from typing import final
 from flask import Flask
 from flask import jsonify, make_response
 from flask import request
@@ -7,9 +8,8 @@ import tempfile
 import os
 import diarization as diar
 import logging
-import sys
-import subprocess
-import shlex
+import youtube_dl
+import sox
 
 # Logging setting
 # root = logging.getLogger()
@@ -60,22 +60,59 @@ def dl():
     if "url" in content:
         # shell = os.path.join(os.getcwd(), "wget_youtube.sh")
         url = content['url']
-        tmp = tempfile.TemporaryDirectory()
         try:
-            path = "{}/rec0087.wav".format(tmp.name)
-            subprocess.call(shlex.split('{} "{}" {}'.format("./wget_youtube.sh", url, path)))
+            wget_youtube(url)
 
-            result = diar.diarization(path)
+            result = diar.diarization("audio/result.wav")
 
             response = jsonify({"result": result})
-
             return response
+
         except Exception as e:
             return make_response(
                 jsonify({"Error": str(e), "Path": os.listdir(".")}), 500
             )
         finally:
-            tmp.cleanup()
+            if os.path.exists("audio/result.wav"):
+                os.remove("audio/result.wav")
     else:
         logging.error("URL not found")
         return make_response(jsonify("URL not found"), 400)
+
+# Download audio from YouTube url
+def wget_youtube(url):
+    # Create a temporary file for ffmpeg
+    tmp = tempfile.TemporaryDirectory()
+    path = "{}/rec0087.wav".format(tmp.name)
+
+    if not os.path.isdir("audio"):
+        os.mkdir("audio")
+
+    try:
+        ydl_opts = {
+            'format': 'bestaudio',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'wav',
+            }],
+            'outtmpl': path
+        }
+
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            length = info.get('duration')
+               
+            os.system("ffmpeg -i {} -ar 16000 -acodec pcm_s16le -af 'pan=mono|FC=FR' {}".format(path, "./audio/ffmpeg.wav"))
+
+            # Python Soc documentation
+            # https://github.com/rabitt/pysox/blob/master/sox/transform.py
+            tfm = sox.Transformer()
+            if length > 180:
+                tfm.trim(90, length-90)
+            tfm.silence(location=1, silence_threshold=1, min_silence_duration=0.1)
+            tfm.silence(location=-1, silence_threshold=1, min_silence_duration=0.1)
+            tfm.build("audio/ffmpeg.wav", "audio/result.wav")
+    finally:
+        if os.path.exists("audio/ffmpeg.wav"):
+            os.remove("audio/ffmpeg.wav")
+        tmp.cleanup()
