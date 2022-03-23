@@ -6,6 +6,8 @@ from flask import request
 from flask_cors import CORS, cross_origin
 import tempfile
 import os
+
+from youtube_dl.utils import DownloadError
 import diarization as diar
 import logging
 import youtube_dl
@@ -57,6 +59,7 @@ def main():
 @cross_origin(origins=["*"])
 def dl():
     content = request.json
+    print(request)
     if "url" in content:
         # shell = os.path.join(os.getcwd(), "wget_youtube.sh")
         url = content['url']
@@ -69,9 +72,14 @@ def dl():
             return response
 
         except Exception as e:
-            return make_response(
-                jsonify({"Error": str(e), "Path": os.listdir(".")}), 500
-            )
+            if type(e) is DownloadError:
+                return make_response(
+                    jsonify({"Error": "Cannot download audio from this URL"}), 403
+                )
+            else:
+                return make_response(
+                    jsonify({"Error": str(e)}), 500
+                )
         finally:
             if os.path.exists("audio/result.wav"):
                 os.remove("audio/result.wav")
