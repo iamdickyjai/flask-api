@@ -1,17 +1,19 @@
 # from diarization import diar
 from typing import final
 from flask import Flask
-from flask import jsonify, make_response
+from flask import jsonify, make_response, send_file
 from flask import request
 from flask_cors import CORS, cross_origin
 import tempfile
 import os
-
+import glob
+from youtube_dl.postprocessor import ffmpeg
 from youtube_dl.utils import DownloadError
 import diarization as diar
 import logging
 import youtube_dl
 import sox
+from pydub import AudioSegment
 
 # Logging setting
 # root = logging.getLogger()
@@ -29,98 +31,99 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
 
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
-# app.config['CORS_HEADERS'] = 'Content-Type'
 
+class UnidentifiedException(Exception):
+    pass
 
 @app.route("/", methods=["POST"])
 @cross_origin(origins=["*"])
 def main():
     data = request.files["file"]
     byte = data.read()
+    
+    if not os.path.isdir("temp"):
+        os.mkdir("temp")
 
-    # Assume wav only
-    # Setup the properties of the audio
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     try:
-        # Create temporary directory for diarization
-        tmp.write(byte)
-        result = diar.diarization(tmp.name)
+        path = convert2WAV(data, byte)
+        result = diar.diarization(path)
 
         response = jsonify({"result": result})
 
         return response
-    except Exception:
+    except Exception as e:
+        print(e)
+
+        if type(e) is UnidentifiedException:
+            return make_response(jsonify({"Error": "File format unidentified!"}), 400)
+
         return make_response(jsonify({"Error": "Error happened"}), 500)
     finally:
-        tmp.close()
-        os.unlink(tmp.name)
+        os.system('rm -rf temp')
 
-@app.route("/youtube", methods=["POST"])
+# Download mp3 file to client
+@app.route("/download", methods=["POST"])
 @cross_origin(origins=["*"])
 def dl():
     content = request.json
-    print(request)
+    
     if "url" in content:
         # shell = os.path.join(os.getcwd(), "wget_youtube.sh")
         url = content['url']
+        tmp = tempfile.TemporaryDirectory()
+        path = "{}/download.mp3".format(tmp.name)
         try:
-            wget_youtube(url)
+            ydl_opts = {
+                'format': 'bestaudio',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                }],
+                'outtmpl': path
+            }
 
-            result = diar.diarization("audio/result.wav")
-
-            response = jsonify({"result": result})
-            return response
-
-        except Exception as e:
-            if type(e) is DownloadError:
-                return make_response(
-                    jsonify({"Error": "Cannot download audio from this URL"}), 403
-                )
-            else:
-                return make_response(
-                    jsonify({"Error": str(e)}), 500
-                )
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                ydl.extract_info(url, download=True)
+                
+            return send_file(path)
         finally:
-            if os.path.exists("audio/result.wav"):
-                os.remove("audio/result.wav")
+            tmp.cleanup()
+
     else:
         logging.error("URL not found")
         return make_response(jsonify("URL not found"), 400)
 
-# Download audio from YouTube url
-def wget_youtube(url):
-    # Create a temporary file for ffmpeg
-    tmp = tempfile.TemporaryDirectory()
-    path = "{}/rec0087.wav".format(tmp.name)
+def convert2WAV(data, byte):
+    content_type = data.content_type
 
-    if not os.path.isdir("audio"):
-        os.mkdir("audio")
+    print('Start converting...')
 
-    try:
-        ydl_opts = {
-            'format': 'bestaudio',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'wav',
-            }],
-            'outtmpl': path
-        }
+    if 'wav' in content_type:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')  
+        tmp.write(byte)   
 
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            length = info.get('duration')
-               
-            os.system("ffmpeg -i {} -ar 16000 -acodec pcm_s16le -af 'pan=mono|FC=FR' {}".format(path, "./audio/ffmpeg.wav"))
+    elif 'mpeg' in content_type:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')  
+        tmp.write(byte)   
 
-            # Python Soc documentation
-            # https://github.com/rabitt/pysox/blob/master/sox/transform.py
-            tfm = sox.Transformer()
-            if length > 180:
-                tfm.trim(90, length-90)
-            tfm.silence(location=1, silence_threshold=1, min_silence_duration=0.1)
-            tfm.silence(location=-1, silence_threshold=1, min_silence_duration=0.1)
-            tfm.build("audio/ffmpeg.wav", "audio/result.wav")
-    finally:
-        if os.path.exists("audio/ffmpeg.wav"):
-            os.remove("audio/ffmpeg.wav")
-        tmp.cleanup()
+    elif 'flac' in content_type:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.flac')
+        tmp.write(byte)
+
+    elif 'm4a' in content_type:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.m4a')
+        tmp.write(byte)
+
+    else:
+        print(content_type)
+        raise UnidentifiedException
+        
+    audio = AudioSegment.from_file(tmp.name)
+    audio.export('temp/audio.wav', format='wav')
+
+    tmp.close()
+    os.unlink(tmp.name)
+
+    os.system("ffmpeg -i {} -ar 16000 -acodec pcm_s16le -ac 1 {}".format("temp/audio.wav", "temp/result.wav"))
+
+    return "temp/result.wav"
