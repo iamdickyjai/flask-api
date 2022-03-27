@@ -14,6 +14,7 @@ import logging
 import youtube_dl
 import sox
 from pydub import AudioSegment
+import uuid
 
 # Logging setting
 # root = logging.getLogger()
@@ -96,6 +97,9 @@ def dl():
 def convert2WAV(data, byte):
     content_type = data.content_type
 
+    temp_path = "temp/tmp_{}.wav".format(uuid.uuid4())
+    result_path = "temp/{}.wav".format(uuid.uuid4())
+
     print('Start converting...')
 
     if 'wav' in content_type:
@@ -119,11 +123,11 @@ def convert2WAV(data, byte):
         raise UnidentifiedException
         
     audio = AudioSegment.from_file(tmp.name)
-    audio.export('temp/audio.wav', format='wav')
+    audio.export(temp_path, format='wav')
 
     tmp.close()
     os.unlink(tmp.name)
 
-    os.system("ffmpeg -i {} -ar 16000 -acodec pcm_s16le -ac 1 {}".format("temp/audio.wav", "temp/result.wav"))
+    os.system("ffmpeg -y -i {} -ar 16000 -acodec pcm_s16le -ac 1 {}".format(temp_path, result_path))
 
-    return "temp/result.wav"
+    return result_path
