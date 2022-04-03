@@ -15,6 +15,7 @@ import youtube_dl
 import sox
 from pydub import AudioSegment
 import uuid
+import zipfile
 
 # Logging setting
 # root = logging.getLogger()
@@ -93,6 +94,37 @@ def dl():
     else:
         logging.error("URL not found")
         return make_response(jsonify("URL not found"), 400)
+
+@app.route("/download/multiple", methods=["POST"])
+@cross_origin(origins=["*"])
+def dl_multiple():
+    file = request.files['file']
+    timestamps = request.form.getlist('timestamp[]')
+    
+    try:
+        if not os.path.isdir("temp/segments"):
+            os.makedirs("temp/segments")
+
+        path = convert2WAV(file, file.read())
+        audio = AudioSegment.from_file(path)
+        
+        for timestamp in timestamps:
+            tmp = timestamp.split(',')
+            start = float(tmp[0])
+            end = float(tmp[1])
+            id = tmp[2]
+
+            segment = audio[start*1000: end*1000]
+            output_path = "temp/segments/result_{}-{}.mp3".format(start,end)
+            segment.export(output_path, format='mp3')           
+
+        dirs = os.listdir("temp/segments")
+        with zipfile.ZipFile('temp/result.zip', 'w') as zipObj:
+            for f in dirs:
+                zipObj.write(os.path.join('temp/segments/', f), f)
+        return send_file('temp/result.zip', mimetype='zip', attachment_filename='result.zip', as_attachment=True)
+    finally:
+        os.system('rm -rf temp')
 
 def convert2WAV(data, byte):
     content_type = data.content_type
