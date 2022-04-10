@@ -34,15 +34,17 @@ if __name__ == "__main__":
 
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
 
+
 class UnidentifiedException(Exception):
     pass
+
 
 @app.route("/", methods=["POST"])
 @cross_origin(origins=["*"])
 def main():
     data = request.files["file"]
     byte = data.read()
-    
+
     if not os.path.isdir("temp"):
         os.mkdir("temp")
 
@@ -61,32 +63,35 @@ def main():
 
         return make_response(jsonify({"Error": "Error happened"}), 500)
     finally:
-        os.system('rm -rf temp')
+        os.system("rm -rf temp")
+
 
 # Download mp3 file to client
 @app.route("/download", methods=["POST"])
 @cross_origin(origins=["*"])
 def dl():
     content = request.json
-    
+
     if "url" in content:
         # shell = os.path.join(os.getcwd(), "wget_youtube.sh")
-        url = content['url']
+        url = content["url"]
         tmp = tempfile.TemporaryDirectory()
         path = "{}/download.mp3".format(tmp.name)
         try:
             ydl_opts = {
-                'format': 'bestaudio',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                }],
-                'outtmpl': path
+                "format": "bestaudio",
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                    }
+                ],
+                "outtmpl": path,
             }
 
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                 ydl.extract_info(url, download=True)
-                
+
             return send_file(path)
         finally:
             tmp.cleanup()
@@ -95,36 +100,43 @@ def dl():
         logging.error("URL not found")
         return make_response(jsonify("URL not found"), 400)
 
+
 @app.route("/download/multiple", methods=["POST"])
 @cross_origin(origins=["*"])
 def dl_multiple():
-    file = request.files['file']
-    timestamps = request.form.getlist('timestamp[]')
-    
+    file = request.files["file"]
+    timestamps = request.form.getlist("timestamp[]")
+
     try:
         if not os.path.isdir("temp/segments"):
             os.makedirs("temp/segments")
 
         path = convert2WAV(file, file.read())
         audio = AudioSegment.from_file(path)
-        
+
         for timestamp in timestamps:
-            tmp = timestamp.split(',')
+            tmp = timestamp.split(",")
             start = float(tmp[0])
             end = float(tmp[1])
             id = tmp[2]
 
-            segment = audio[start*1000: end*1000]
-            output_path = "temp/segments/result_{}-{}.mp3".format(start,end)
-            segment.export(output_path, format='mp3')           
+            segment = audio[start * 1000 : end * 1000]
+            output_path = "temp/segments/result_{}-{}.mp3".format(start, end)
+            segment.export(output_path, format="mp3")
 
         dirs = os.listdir("temp/segments")
-        with zipfile.ZipFile('temp/result.zip', 'w') as zipObj:
+        with zipfile.ZipFile("temp/result.zip", "w") as zipObj:
             for f in dirs:
-                zipObj.write(os.path.join('temp/segments/', f), f)
-        return send_file('temp/result.zip', mimetype='zip', attachment_filename='result.zip', as_attachment=True)
+                zipObj.write(os.path.join("temp/segments/", f), f)
+        return send_file(
+            "temp/result.zip",
+            mimetype="zip",
+            attachment_filename="result.zip",
+            as_attachment=True,
+        )
     finally:
-        os.system('rm -rf temp')
+        os.system("rm -rf temp")
+
 
 def convert2WAV(data, byte):
     content_type = data.content_type
@@ -132,34 +144,38 @@ def convert2WAV(data, byte):
     temp_path = "temp/tmp_{}.wav".format(uuid.uuid4())
     result_path = "temp/{}.wav".format(uuid.uuid4())
 
-    print('Start converting...')
+    print("Start converting...")
 
-    if 'wav' in content_type:
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')  
-        tmp.write(byte)   
-
-    elif 'mpeg' in content_type:
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')  
-        tmp.write(byte)   
-
-    elif 'flac' in content_type:
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.flac')
+    if "wav" in content_type:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
         tmp.write(byte)
 
-    elif 'm4a' in content_type:
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.m4a')
+    elif "mpeg" in content_type:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        tmp.write(byte)
+
+    elif "flac" in content_type:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".flac")
+        tmp.write(byte)
+
+    elif "m4a" in content_type:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".m4a")
         tmp.write(byte)
 
     else:
         print(content_type)
         raise UnidentifiedException
-        
+
     audio = AudioSegment.from_file(tmp.name)
-    audio.export(temp_path, format='wav')
+    audio.export(temp_path, format="wav")
 
     tmp.close()
     os.unlink(tmp.name)
 
-    os.system("ffmpeg -y -i {} -ar 16000 -acodec pcm_s16le -ac 1 {}".format(temp_path, result_path))
+    os.system(
+        "ffmpeg -y -i {} -ar 16000 -acodec pcm_s16le -ac 1 {}".format(
+            temp_path, result_path
+        )
+    )
 
     return result_path

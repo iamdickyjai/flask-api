@@ -11,32 +11,36 @@ import logging
 All timestamp are formatted in 2 d.p.
 """
 
-# logging.basicConfig(filename="diar.log", 
-#                     filemode="a", 
+# logging.basicConfig(filename="diar.log",
+#                     filemode="a",
 #                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
 #                     datefmt='%H:%M:%S',
 #                     level=logging.INFO)
+
 
 def diarization(path):
     try:
         logging.info("Start diarization")
 
         # Speaker Segmentation & Speaker Embedding
-        [embeddings, timestamp] = segNemb(path)  
+        [embeddings, timestamp] = segNemb(path)
 
         # Speaker Clustering
         lol = spec_clust(embeddings=embeddings, timestamp=timestamp)
-        
+
         logging.info("Diarization finished")
         return lol
-    except Exception:      
+    except Exception:
         return Exception
+
 
 # Return a list of arrays e.g. [[0.00, 1.23], [1.29, 3.23]]
 def pre_processing(path):
     logging.info("Start Preprocessing")
-    v = VAD.from_hparams(source="speechbrain/vad-crdnn-libriparty", savedir="./pretrained_models/VAD")
-    
+    v = VAD.from_hparams(
+        source="speechbrain/vad-crdnn-libriparty", savedir="./pretrained_models/VAD"
+    )
+
     boundaries = get_speech_segments(path, v)
     boundaries = boundaries.tolist()
     boundaries_round = round_down_boundaries(boundaries, 2)
@@ -44,26 +48,29 @@ def pre_processing(path):
     logging.info("Preprocessing end")
     return boundaries_round
 
+
 # Return [list_emb, list_timestamp]
-def segNemb(path, sampling_rate=16000, vad=True):
+def segNemb(path, sampling_rate=16000, vad=False):
     """
     path            : string, Point to the location of the audio file.
                       Should be a virtual directory.
-    sampling_rate   : integer 
+    sampling_rate   : integer
     vad             : Boolean, decide if VAD should be used
-    """    
+    """
     wav = read_audio(path)
     length = len(wav)
     segment_len = 1.5
 
-    activities = ([[0, round(float(length / sampling_rate), 2)]] 
-                    if vad 
-                    else pre_processing(str(path)))
+    activities = (
+        pre_processing(str(path))
+        if vad
+        else [[0, round(float(length / sampling_rate), 2)]]
+    )
 
     # Store the embeddings and timestamp for each segment
     embeddings = []
     timestamp = []
-    
+
     logging.info("Start Speaker embedding")
     for act in activities:
         # Get the starting and ending time of current section
@@ -94,8 +101,10 @@ def segNemb(path, sampling_rate=16000, vad=True):
                 segment = wav[start_frame:end_frame]
 
                 # Perform Speaker Embedding
-                classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb"
-                                , savedir="./pretrained_models/EMB")
+                classifier = EncoderClassifier.from_hparams(
+                    source="speechbrain/spkrec-ecapa-voxceleb",
+                    savedir="./pretrained_models/EMB",
+                )
                 e = classifier.encode_batch(segment)
                 embeddings.append(e[0, 0].numpy())
 
@@ -106,6 +115,7 @@ def segNemb(path, sampling_rate=16000, vad=True):
     logging.info("Speaker embedding finished")
     return [embeddings, timestamp]
 
+
 # Return [["audio", sseg_start, sseg_end, spkr_id]]
 # Example: [["audio", 0.00, 0.75, 1], ["audio", 0.75, 1.5, 3]...]
 def spec_clust(embeddings, timestamp):
@@ -113,7 +123,7 @@ def spec_clust(embeddings, timestamp):
     embeddings  : A list of embeddings
     timestamp   : A list of timestamp, each contain start time and end time
     """
-    
+
     logging.info("Start Clustering")
 
     # Define the clustering
@@ -145,11 +155,12 @@ def spec_clust(embeddings, timestamp):
     logging.info("Clustering finished")
     return new_lol
 
+
 # From speechBrain.pretrained.VAD
 # Modify to disable save to local file, other remain the same
 def get_speech_segments(path, VAD):
     source, fl = split_path(path)
-    audio_file = fetch(fl, source=source, savedir = '/tmp')
+    audio_file = fetch(fl, source=source, savedir="/tmp")
 
     # Computing speech vs non speech probabilities
     prob_chunks = VAD.get_speech_prob_file(audio_file)
@@ -168,11 +179,12 @@ def get_speech_segments(path, VAD):
 
     return boundaries
 
+
 def round_down_boundaries(boundaries, dp):
     round_boundaires = []
     for boundary in boundaries:
         tmp_boundary = []
-        start = boundary[0] 
+        start = boundary[0]
         end = boundary[1]
 
         start_round = round(start, dp)
@@ -182,5 +194,5 @@ def round_down_boundaries(boundaries, dp):
         tmp_boundary.append(end_round)
 
         round_boundaires.append(tmp_boundary)
-    
+
     return round_boundaires
