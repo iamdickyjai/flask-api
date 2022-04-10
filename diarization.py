@@ -11,6 +11,15 @@ import logging
 All timestamp are formatted in 2 d.p.
 """
 
+# Pretrained model used
+v = VAD.from_hparams(
+    source="speechbrain/vad-crdnn-libriparty", savedir="./pretrained_models/VAD"
+)
+classifier = EncoderClassifier.from_hparams(
+    source="speechbrain/spkrec-ecapa-voxceleb",
+    savedir="./pretrained_models/EMB",
+)
+
 # logging.basicConfig(filename="diar.log",
 #                     filemode="a",
 #                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
@@ -37,9 +46,6 @@ def diarization(path):
 # Return a list of arrays e.g. [[0.00, 1.23], [1.29, 3.23]]
 def pre_processing(path):
     logging.info("Start Preprocessing")
-    v = VAD.from_hparams(
-        source="speechbrain/vad-crdnn-libriparty", savedir="./pretrained_models/VAD"
-    )
 
     boundaries = get_speech_segments(path, v)
     boundaries = boundaries.tolist()
@@ -101,10 +107,6 @@ def segNemb(path, sampling_rate=16000, vad=False):
                 segment = wav[start_frame:end_frame]
 
                 # Perform Speaker Embedding
-                classifier = EncoderClassifier.from_hparams(
-                    source="speechbrain/spkrec-ecapa-voxceleb",
-                    savedir="./pretrained_models/EMB",
-                )
                 e = classifier.encode_batch(segment)
                 embeddings.append(e[0, 0].numpy())
 
