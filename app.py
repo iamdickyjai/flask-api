@@ -42,11 +42,13 @@ class UnidentifiedException(Exception):
 @app.route("/", methods=["POST"])
 @cross_origin(origins=["*"])
 def main():
+    #region Receive data from request
     data = request.files["file"]
     byte = data.read()
 
     if not os.path.isdir("temp"):
         os.mkdir("temp")
+    #endregion
 
     try:
         path = convert2WAV(data, byte)
@@ -56,8 +58,6 @@ def main():
 
         return response
     except Exception as e:
-        print(e)
-
         if type(e) is UnidentifiedException:
             return make_response(jsonify({"Error": "File format unidentified!"}), 400)
 
