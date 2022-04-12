@@ -43,6 +43,7 @@ class UnidentifiedException(Exception):
 @cross_origin(origins=["*"])
 def main():
     #region Receive data from request
+    vad = True if request.values["vad"] == "true" else False
     data = request.files["file"]
     byte = data.read()
 
@@ -52,7 +53,7 @@ def main():
 
     try:
         path = convert2WAV(data, byte)
-        result = diar.diarization(path)
+        result = diar.diarization(path, vad)
 
         response = jsonify({"result": result})
 
