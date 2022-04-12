@@ -27,12 +27,12 @@ classifier = EncoderClassifier.from_hparams(
 #                     level=logging.INFO)
 
 
-def diarization(path):
+def diarization(path, vad):
     try:
         logging.info("Start diarization")
 
         # Speaker Segmentation & Speaker Embedding
-        [embeddings, timestamp] = segNemb(path)
+        [embeddings, timestamp] = segNemb(path, 16000, vad)
 
         # Speaker Clustering
         lol = spec_clust(embeddings=embeddings, timestamp=timestamp)
@@ -54,9 +54,8 @@ def pre_processing(path):
     logging.info("Preprocessing end")
     return boundaries_round
 
-
 # Return [list_emb, list_timestamp]
-def segNemb(path, sampling_rate=16000, vad=False):
+def segNemb(path, sampling_rate, vad):
     """
     path            : string, Point to the location of the audio file.
                       Should be a virtual directory.
@@ -67,11 +66,10 @@ def segNemb(path, sampling_rate=16000, vad=False):
     length = len(wav)
     segment_len = 1.5
 
-    activities = (
-        pre_processing(str(path))
-        if vad
-        else [[0, round(float(length / sampling_rate), 2)]]
-    )
+    if vad:
+        activities = pre_processing(str(path))
+    else:
+        activities = [[0, round(float(length / sampling_rate), 2)]]
 
     # Store the embeddings and timestamp for each segment
     embeddings = []
