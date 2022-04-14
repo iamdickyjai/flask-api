@@ -1,4 +1,5 @@
 # from diarization import diar
+from datetime import time
 from typing import final
 from flask import Flask
 from flask import jsonify, make_response, send_file
@@ -10,6 +11,7 @@ import glob
 from youtube_dl.postprocessor import ffmpeg
 from youtube_dl.utils import DownloadError
 import diarization as diar
+from asr import ASR
 import logging
 import youtube_dl
 import sox
@@ -38,7 +40,6 @@ cors = CORS(app, resources={r"/*": {"origins": "*"}})
 class UnidentifiedException(Exception):
     pass
 
-
 @app.route("/", methods=["POST"])
 @cross_origin(origins=["*"])
 def main():
@@ -65,7 +66,6 @@ def main():
         return make_response(jsonify({"Error": "Error happened"}), 500)
     finally:
         os.system("rm -rf temp")
-
 
 # Download mp3 file to client
 @app.route("/download", methods=["POST"])
@@ -101,7 +101,6 @@ def dl():
         logging.error("URL not found")
         return make_response(jsonify("URL not found"), 400)
 
-
 @app.route("/download/multiple", methods=["POST"])
 @cross_origin(origins=["*"])
 def dl_multiple():
@@ -135,6 +134,36 @@ def dl_multiple():
             attachment_filename="result.zip",
             as_attachment=True,
         )
+    finally:
+        os.system("rm -rf temp")
+
+@app.route('/asr', methods=["POST"])
+@cross_origin(origins=["*"])
+def asr():
+    try:
+        timestamps = request.values["timestamps"]
+        timestamps = timestamps.split(',')
+        data = request.files["file"]
+        byte = data.read()
+
+        if not os.path.isdir("temp/segments"):
+            os.makedirs("temp/segments")
+        path = convert2WAV(data, byte)
+
+        tsArr = []
+        for i in range(0, len(timestamps), 4):
+            tsArr.append([float(timestamps[i]), float(timestamps[i+1]), int(timestamps[i+2])])
+
+        result = ASR(path, tsArr)
+        print(result)
+        response = jsonify({"result": result})
+        return response
+    except Exception as e:
+        print(e)
+        if type(e) is UnidentifiedException:
+            return make_response(jsonify({"Error": "File format unidentified!"}), 400)
+
+        return make_response(jsonify({"Error": "Error happened"}), 500)
     finally:
         os.system("rm -rf temp")
 
