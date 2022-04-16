@@ -1,3 +1,6 @@
+import os
+os.environ['HUGGINGFACE_HUB_CACHE'] = 'cache'
+
 from speechbrain.dataio.dataio import read_audio
 from speechbrain.pretrained import VAD
 from speechbrain.utils.data_utils import split_path
