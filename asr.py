@@ -4,9 +4,10 @@ os.environ['HUGGINGFACE_HUB_CACHE'] = 'cache'
 from speechbrain.pretrained import EncoderDecoderASR
 from pydub import AudioSegment
 
-asr_model = EncoderDecoderASR.from_hparams(source="speechbrain/asr-crdnn-rnnlm-librispeech", savedir="./pretrained_models/ASR")
 
 def ASR(file, timestamps):
+    asr_model = EncoderDecoderASR.from_hparams(source="speechbrain/asr-crdnn-rnnlm-librispeech", savedir="./pretrained_models/ASR")
+    
     audio = AudioSegment.from_file(file)
     
     result = []

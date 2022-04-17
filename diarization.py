@@ -14,15 +14,6 @@ import logging
 All timestamp are formatted in 2 d.p.
 """
 
-# Pretrained model used
-v = VAD.from_hparams(
-    source="speechbrain/vad-crdnn-libriparty", savedir="./pretrained_models/VAD"
-)
-classifier = EncoderClassifier.from_hparams(
-    source="speechbrain/spkrec-ecapa-voxceleb",
-    savedir="./pretrained_models/EMB",
-)
-
 # logging.basicConfig(filename="diar.log",
 #                     filemode="a",
 #                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
@@ -50,6 +41,10 @@ def diarization(path, vad):
 def pre_processing(path):
     logging.info("Start Preprocessing")
 
+    v = VAD.from_hparams(
+        source="speechbrain/vad-crdnn-libriparty", savedir="./pretrained_models/VAD"
+    )
+
     boundaries = get_speech_segments(path, v)
     boundaries = boundaries.tolist()
     boundaries_round = round_down_boundaries(boundaries, 2)
@@ -68,6 +63,12 @@ def segNemb(path, sampling_rate, vad):
     wav = read_audio(path)
     length = len(wav)
     segment_len = 1.5
+
+    classifier = EncoderClassifier.from_hparams(
+        source="speechbrain/spkrec-ecapa-voxceleb",
+        savedir="./pretrained_models/EMB",
+    )
+
 
     if vad:
         activities = pre_processing(str(path))
