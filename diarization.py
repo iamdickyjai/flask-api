@@ -69,7 +69,6 @@ def segNemb(path, sampling_rate, vad):
         savedir="./pretrained_models/EMB",
     )
 
-
     if vad:
         activities = pre_processing(str(path))
     else:
